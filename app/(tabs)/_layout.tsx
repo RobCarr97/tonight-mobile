@@ -34,12 +34,12 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="explore"
+          name="dates"
           options={{
-            title: 'Explore',
+            title: 'Dates',
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
-                name={focused ? 'search' : 'search-outline'}
+                name={focused ? 'map' : 'map-outline'}
                 size={24}
                 color={color}
               />
@@ -53,6 +53,19 @@ export default function TabLayout() {
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? 'add-circle' : 'add-circle-outline'}
+                size={24}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="requests"
+          options={{
+            title: 'Requests',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? 'notifications' : 'notifications-outline'}
                 size={24}
                 color={color}
               />

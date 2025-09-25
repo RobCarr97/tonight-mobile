@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,18 +9,34 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TonightLogo from '../../src/components/TonightLogo';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { dateEventService } from '../../src/services';
+import { dateEventService, userService } from '../../src/services';
 import { DateEvent } from '../../src/types';
 
 const DashboardScreen: React.FC = () => {
-  const { user: currentUser, logout } = useAuth();
+  const { user: currentUser } = useAuth();
+
+  // Profile viewing state
+  const [showPublicProfile, setShowPublicProfile] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Get user's created events using the proper API endpoint
   const myEventsQuery = useQuery({
     queryKey: ['userEvents', currentUser?.username],
     queryFn: () => {
       return dateEventService.getUserEvents(currentUser!.username);
+    },
+    enabled: !!currentUser?.username,
+    retry: 1, // Reduce retries to fail faster
+    staleTime: 1000 * 60, // 1 minute
+  });
+
+  // Get user's available requests (events they can potentially join)
+  const availableRequestsQuery = useQuery({
+    queryKey: ['availableRequests', currentUser?.username],
+    queryFn: () => {
+      return dateEventService.getAvailableRequests(currentUser!.username);
     },
     enabled: !!currentUser?.username,
     retry: 1, // Reduce retries to fail faster
@@ -45,6 +62,22 @@ const DashboardScreen: React.FC = () => {
     staleTime: 1000 * 60, // 1 minute
   });
 
+  // Public profile query
+  const {
+    data: publicProfile,
+    isLoading: profileLoading,
+    error: profileError,
+  } = useQuery({
+    queryKey: ['publicProfile', selectedUserId],
+    queryFn: async () => {
+      if (!selectedUserId) return null;
+      return await userService.getPublicProfile(selectedUserId);
+    },
+    enabled: !!selectedUserId && showPublicProfile,
+    retry: 2,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
   // Get events from proper API endpoints
   const myEvents =
     (myEventsQuery.data as any)?.data || myEventsQuery.data || [];
@@ -63,19 +96,40 @@ const DashboardScreen: React.FC = () => {
 
   // Ensure we have an array to work with
   const allEvents = Array.isArray(allEventsData) ? allEventsData : [];
+  const myAvailableRequests = availableRequestsQuery.data || [];
 
-  // Joined Events are those where I was accepted to join (acceptedUserId matches my username)
-  const joinedEvents = allEvents.filter(
-    event => event.acceptedUserId === currentUser?.username
-  );
+  // Current date for filtering future events
+  const currentDate = new Date();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      // Navigation will be handled by the auth state change
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+  // Upcoming Events: Events where user was accepted (either as host accepting someone or as requester who was accepted)
+  const upcomingEvents = allEvents.filter(event => {
+    const eventDateTime = new Date(`${event.eventDate} ${event.eventTime}`);
+    const isFuture = eventDateTime > currentDate;
+
+    // Include if user was accepted to join someone else's event
+    const wasAcceptedToJoin = event.acceptedUserId === currentUser?.username;
+
+    // Include if user is host and has accepted someone to their event
+    const isHostWithAcceptedUser =
+      event.hostUserId === currentUser?.username && event.acceptedUserId;
+
+    return isFuture && (wasAcceptedToJoin || isHostWithAcceptedUser);
+  });
+
+  // My Events: User's own events that are still open for requests
+  const myHostedEvents = myEvents.filter((event: any) => {
+    const eventDateTime = new Date(`${event.eventDate} ${event.eventTime}`);
+    return (
+      eventDateTime > currentDate &&
+      event.status === 'open' &&
+      !event.acceptedUserId // No one accepted yet
+    );
+  });
+
+  const handleViewProfile = (userId: string) => {
+    console.log('👤 Profile button clicked for user:', userId);
+    setSelectedUserId(userId);
+    setShowPublicProfile(true);
   };
 
   return (
@@ -83,16 +137,11 @@ const DashboardScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Tonight</Text>
+          <TonightLogo size="medium" />
           <View style={styles.userInfo}>
             <Text style={styles.welcomeText}>
               Welcome, {currentUser?.username}!
             </Text>
-            <TouchableOpacity
-              onPress={handleLogout}
-              style={styles.logoutButton}>
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -105,28 +154,16 @@ const DashboardScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Quick Stats */}
-        <View style={styles.statsSection}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{myEvents.length}</Text>
-            <Text style={styles.statLabel}>My Events</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{joinedEvents.length}</Text>
-            <Text style={styles.statLabel}>Joined Events</Text>
-          </View>
-        </View>
-
-        {/* Recent Events */}
+        {/* Upcoming Dates (Accepted Events) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Recent Events</Text>
-          {myEventsQuery.isLoading ? (
+          <Text style={styles.sectionTitle}>Upcoming Dates</Text>
+          {allEventsQuery.isLoading ? (
             <Text style={styles.loadingText}>Loading events...</Text>
-          ) : myEvents.length > 0 ? (
+          ) : upcomingEvents.length > 0 ? (
             <View style={styles.eventsList}>
-              {myEvents.slice(0, 3).map((event: DateEvent) => (
+              {upcomingEvents.map((event: DateEvent) => (
                 <View key={event.id} style={styles.eventCard}>
-                  <Text style={styles.eventTitle}>Date Event</Text>
+                  <Text style={styles.eventTitle}>Date</Text>
                   <Text style={styles.eventDetail}>
                     Venue: {event.venue?.name || event.bar?.name || event.barId}
                   </Text>
@@ -134,33 +171,64 @@ const DashboardScreen: React.FC = () => {
                     Date: {event.eventDate} at {event.eventTime}
                   </Text>
                   <Text style={styles.eventDetail}>Status: {event.status}</Text>
+
+                  {/* Show either accepted requester (if user is host) or host (if user is participant) */}
+                  <View style={styles.hostInfo}>
+                    {event.hostUserId === currentUser?.username ? (
+                      // Current user is the host - show accepted requester
+                      <>
+                        <Text style={styles.eventDetail}>
+                          Accepted:{' '}
+                          {event.acceptedUser?.username || event.acceptedUserId}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.profileButton}
+                          onPress={() =>
+                            handleViewProfile(event.acceptedUserId!)
+                          }>
+                          <Text style={styles.profileButtonText}>
+                            View Profile
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      // Current user is the participant - show host
+                      <>
+                        <Text style={styles.eventDetail}>
+                          Host: {event.hostUser?.username || event.hostUserId}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.profileButton}
+                          onPress={() => handleViewProfile(event.hostUserId)}>
+                          <Text style={styles.profileButtonText}>
+                            View Profile
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
           ) : (
             <View style={styles.noEventsContainer}>
               <Text style={styles.noEventsText}>
-                You haven&apos;t created any events yet.
+                You don&apos;t have any upcoming dates.
               </Text>
-              <TouchableOpacity style={styles.createEventButton}>
-                <Text style={styles.createEventButtonText}>
-                  Create your first event
-                </Text>
-              </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* Events I'm Attending */}
+        {/* My Hosted Events */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Events I&apos;m Attending</Text>
-          {allEventsQuery.isLoading ? (
+          <Text style={styles.sectionTitle}>My Open Dates</Text>
+          {myEventsQuery.isLoading ? (
             <Text style={styles.loadingText}>Loading events...</Text>
-          ) : joinedEvents.length > 0 ? (
+          ) : myHostedEvents.length > 0 ? (
             <View style={styles.eventsList}>
-              {joinedEvents.slice(0, 3).map((event: DateEvent) => (
+              {myHostedEvents.map((event: DateEvent) => (
                 <View key={event.id} style={styles.eventCard}>
-                  <Text style={styles.eventTitle}>Date Event</Text>
+                  <Text style={styles.eventTitle}>Date</Text>
                   <Text style={styles.eventDetail}>
                     Venue: {event.venue?.name || event.bar?.name || event.barId}
                   </Text>
@@ -174,17 +242,117 @@ const DashboardScreen: React.FC = () => {
           ) : (
             <View style={styles.noEventsContainer}>
               <Text style={styles.noEventsText}>
-                You&apos;re not attending any events yet.
+                You don&apos;t have any open dates right now.
               </Text>
-              <TouchableOpacity style={styles.findEventsButton}>
-                <Text style={styles.findEventsButtonText}>
-                  Find events to join
-                </Text>
-              </TouchableOpacity>
             </View>
           )}
         </View>
       </ScrollView>
+
+      {/* Public Profile Modal */}
+      <Modal
+        visible={showPublicProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowPublicProfile(false);
+          setSelectedUserId(null);
+        }}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>User Profile</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowPublicProfile(false);
+                setSelectedUserId(null);
+              }}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {profileLoading ? (
+              <View style={styles.profileLoadingContainer}>
+                <Text style={styles.loadingText}>Loading profile...</Text>
+              </View>
+            ) : profileError ? (
+              <View style={styles.profileErrorContainer}>
+                <Text style={styles.errorText}>Failed to load profile</Text>
+              </View>
+            ) : publicProfile ? (
+              (() => {
+                // Handle both wrapped and unwrapped API response formats
+                const profileData = (publicProfile as any).data
+                  ? (publicProfile as any).data
+                  : publicProfile;
+
+                return (
+                  <>
+                    <Text style={styles.profileUsername}>
+                      {profileData.username}
+                    </Text>
+
+                    <View style={styles.profileInfo}>
+                      {profileData.dob && (
+                        <Text style={styles.profileAge}>
+                          Age:{' '}
+                          {new Date().getFullYear() -
+                            new Date(profileData.dob).getFullYear()}{' '}
+                          years old
+                        </Text>
+                      )}
+
+                      {profileData.id && (
+                        <Text style={styles.profileDetail}>
+                          User ID: {profileData.id}
+                        </Text>
+                      )}
+
+                      {profileData.gender && (
+                        <Text style={styles.profileDetail}>
+                          Gender:{' '}
+                          {profileData.gender.charAt(0).toUpperCase() +
+                            profileData.gender.slice(1)}
+                        </Text>
+                      )}
+
+                      {profileData.orientation && (
+                        <Text style={styles.profileDetail}>
+                          Orientation:{' '}
+                          {profileData.orientation.charAt(0).toUpperCase() +
+                            profileData.orientation.slice(1)}
+                        </Text>
+                      )}
+                    </View>
+
+                    {profileData.promptAnswers &&
+                      profileData.promptAnswers.length > 0 && (
+                        <View style={styles.promptAnswersSection}>
+                          <Text style={styles.promptAnswersTitle}>
+                            Profile Questions
+                          </Text>
+                          {profileData.promptAnswers.map(
+                            (answer: any, index: number) => (
+                              <View key={index} style={styles.promptAnswer}>
+                                <Text style={styles.promptQuestion}>
+                                  Question {index + 1}
+                                </Text>
+                                <Text style={styles.promptAnswerText}>
+                                  {answer.answer}
+                                </Text>
+                              </View>
+                            )
+                          )}
+                        </View>
+                      )}
+                  </>
+                );
+              })()
+            ) : null}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -352,6 +520,118 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  hostInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  profileButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  profileButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+    backgroundColor: '#fff',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  profileLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  profileErrorContainer: {
+    backgroundColor: '#f8d7da',
+    padding: 15,
+    borderRadius: 8,
+    margin: 20,
+  },
+  profileUsername: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  profileInfo: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  profileAge: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  profileDetail: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  promptAnswersSection: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+  },
+  promptAnswersTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  promptAnswer: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  promptQuestion: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  promptAnswerText: {
+    fontSize: 14,
+    color: '#333',
   },
 });
 

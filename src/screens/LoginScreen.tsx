@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TonightLogo from '../components/TonightLogo';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services';
 import { AuthResponseData } from '../types';
@@ -103,7 +104,9 @@ const LoginScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.content}>
-          <Text style={styles.title}>Tonight</Text>
+          <View style={styles.logoContainer}>
+            <TonightLogo size="large" />
+          </View>
           <Text style={styles.subtitle}>Find your perfect date tonight</Text>
 
           <View style={styles.form}>
@@ -194,6 +197,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   title: {
     fontSize: 48,

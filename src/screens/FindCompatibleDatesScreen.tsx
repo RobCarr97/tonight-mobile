@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TonightLogo from '../components/TonightLogo';
 import { useAuth } from '../contexts/AuthContext';
 import { dateEventService } from '../services';
 import { DateEvent, DateEventsInAreaRequest } from '../types';
@@ -327,7 +328,7 @@ const FindCompatibleDatesScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>TONIGHT</Text>
+        <TonightLogo size="small" />
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}>

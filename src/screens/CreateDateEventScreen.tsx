@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import TonightLogo from '../components/TonightLogo';
 import { useAuth } from '../contexts/AuthContext';
 import { dateEventService, venueService } from '../services';
 import { Bar, CreateDateEventRequest } from '../types';
@@ -210,7 +211,7 @@ export default function CreateDateEventScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Create Date Event</Text>
+        <TonightLogo size="medium" />
         <Text style={styles.subtitle}>Plan your perfect date night!</Text>
       </View>
 
@@ -279,13 +280,6 @@ export default function CreateDateEventScreen() {
                 </View>
               )}
             </View>
-          )}
-
-          {userLocation && useCurrentLocation && (
-            <Text style={styles.locationStatus}>
-              ✅ Using your current location ({userLocation.lat.toFixed(4)},{' '}
-              {userLocation.lng.toFixed(4)})
-            </Text>
           )}
         </View>
 
@@ -820,14 +814,6 @@ const styles = StyleSheet.create({
   },
   venueTypeButtonTextActive: {
     color: '#fff',
-  },
-  locationStatus: {
-    fontSize: 13,
-    color: '#28a745',
-    backgroundColor: '#e8f5e8',
-    padding: 8,
-    borderRadius: 6,
-    marginTop: 8,
   },
   // Dropdown styles
   dropdownWrapper: {

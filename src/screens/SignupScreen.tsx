@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordStrengthIndicator } from '../components/PasswordStrengthIndicator';
+import TonightLogo from '../components/TonightLogo';
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../services/apiClient';
 import { validatePassword } from '../utils/passwordValidation';
@@ -339,7 +340,7 @@ const SignupScreen: React.FC = () => {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.content}>
             <View style={styles.header}>
-              <Text style={styles.title}>Create Account</Text>
+              <TonightLogo size="large" />
               <Text style={styles.subtitle}>
                 Join us and start your journey
               </Text>

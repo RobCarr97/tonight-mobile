@@ -1,5 +1,6 @@
 import { PromptCategory } from '../constants/promptCategories';
 import {
+  PublicUserProfile,
   UpdateProfileRequest,
   UserFilterRequest,
   UserResponse,
@@ -125,6 +126,32 @@ class UserService {
         throw error;
       }
       throw new ApiError('Failed to search users', 500, [
+        error instanceof Error ? error.message : 'Unknown error',
+      ]);
+    }
+  }
+
+  // Get public user profile (uses GET /users/{id}/profile endpoint)
+  async getPublicProfile(userId: string): Promise<PublicUserProfile> {
+    try {
+      if (!userId || userId === 'undefined') {
+        throw new ApiError('User ID is required', 400, ['Invalid user ID']);
+      }
+
+      console.log('👤 Getting public profile for user:', userId);
+
+      const response = await apiClient.get<PublicUserProfile>(
+        `/users/${userId}/profile`
+      );
+
+      console.log('✅ Public profile loaded:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Public profile error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError('Failed to get public profile', 500, [
         error instanceof Error ? error.message : 'Unknown error',
       ]);
     }

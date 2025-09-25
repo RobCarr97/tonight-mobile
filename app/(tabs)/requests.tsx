@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TonightLogo from '../../src/components/TonightLogo';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { dateEventService } from '../../src/services';
 import { DateRequest } from '../../src/types';
@@ -89,6 +90,11 @@ const RequestsScreen: React.FC = () => {
       return `${date} at ${time}`;
     }
   };
+
+  // Filter to only show pending requests (not accepted or rejected)
+  const pendingRequests = incomingRequests.filter(
+    request => request.status === 'pending' || !request.status
+  );
 
   const renderRequestItem = ({ item }: { item: DateRequest }) => {
     const event = item.dateEvent;
@@ -191,15 +197,15 @@ const RequestsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Date Requests</Text>
+        <TonightLogo size="medium" />
         <Text style={styles.subtitle}>
-          {incomingRequests.length} request
-          {incomingRequests.length !== 1 ? 's' : ''}
+          {pendingRequests.length} pending request
+          {pendingRequests.length !== 1 ? 's' : ''}
         </Text>
       </View>
 
       <FlatList
-        data={incomingRequests}
+        data={pendingRequests}
         keyExtractor={item => item.id}
         renderItem={renderRequestItem}
         contentContainerStyle={styles.listContainer}
@@ -212,9 +218,9 @@ const RequestsScreen: React.FC = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No incoming requests</Text>
+            <Text style={styles.emptyText}>No pending requests</Text>
             <Text style={styles.emptySubtext}>
-              Requests for your date events will appear here
+              New requests for your date events will appear here
             </Text>
           </View>
         }

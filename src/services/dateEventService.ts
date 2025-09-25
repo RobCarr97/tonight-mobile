@@ -361,6 +361,39 @@ class DateEventService {
       ]);
     }
   }
+
+  // Get available (open) requests for a specific user
+  async getAvailableRequests(userId: string): Promise<DateRequest[]> {
+    try {
+      // Validate required parameters
+      if (!userId || userId.trim() === '') {
+        throw new ApiError('User ID is required', 400, [
+          'userId cannot be empty',
+        ]);
+      }
+
+      const response = await apiClient.get<any>(
+        `/date-events/available/${userId}`
+      );
+
+      // Handle different response formats
+      const requests = Array.isArray(response)
+        ? response
+        : response.data && Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      return requests;
+    } catch (error) {
+      console.error('Get available requests error:', error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError('Failed to get available requests', 500, [
+        error instanceof Error ? error.message : 'Unknown error',
+      ]);
+    }
+  }
 }
 
 // Export singleton instance
