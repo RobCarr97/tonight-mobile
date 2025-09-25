@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 /**
  * Example component demonstrating how to use deep linking to navigate to EditProfileScreen
@@ -11,7 +11,7 @@ const DeepLinkingExample: React.FC = () => {
     // Example: Navigate to edit profile with specific values
     // This simulates what would happen if a user clicked a link like:
     // tonight://edit-profile?username=johndoe&gender=male&showGender=true&showOrientation=false
-    
+
     router.push({
       pathname: 'edit-profile' as any,
       params: {
@@ -20,8 +20,8 @@ const DeepLinkingExample: React.FC = () => {
         orientation: 'straight',
         showGender: 'true',
         showOrientation: 'false',
-        dob: '1990-05-15'
-      }
+        dob: '1990-05-15',
+      },
     });
   };
 
@@ -31,8 +31,8 @@ const DeepLinkingExample: React.FC = () => {
       pathname: 'edit-profile' as any,
       params: {
         showGender: 'true',
-        showOrientation: 'true'
-      }
+        showOrientation: 'true',
+      },
     });
   };
 
@@ -40,26 +40,20 @@ const DeepLinkingExample: React.FC = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Deep Linking Examples</Text>
       <Text style={styles.description}>
-        These buttons demonstrate how to navigate to the EditProfileScreen with 
+        These buttons demonstrate how to navigate to the EditProfileScreen with
         pre-populated values using deep linking parameters.
       </Text>
 
-      <TouchableOpacity 
-        style={styles.button} 
-        onPress={navigateToEditProfileWithParams}
-      >
-        <Text style={styles.buttonText}>
-          Edit Profile with Full Data
-        </Text>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={navigateToEditProfileWithParams}>
+        <Text style={styles.buttonText}>Edit Profile with Full Data</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.button} 
-        onPress={navigateToEditProfileWithPrivacyUpdate}
-      >
-        <Text style={styles.buttonText}>
-          Update Privacy Settings Only
-        </Text>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={navigateToEditProfileWithPrivacyUpdate}>
+        <Text style={styles.buttonText}>Update Privacy Settings Only</Text>
       </TouchableOpacity>
 
       <View style={styles.urlExamples}>

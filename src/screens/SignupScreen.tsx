@@ -18,8 +18,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PasswordStrengthIndicator } from '../components/PasswordStrengthIndicator';
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../services/apiClient';
+import { validatePassword } from '../utils/passwordValidation';
 
 interface UserPromptAnswer {
   categoryId: string;
@@ -241,10 +243,12 @@ const SignupScreen: React.FC = () => {
     }
 
     if (!formData.password) {
-      newErrors.password =
-        'Password must meet security requirements (8+ chars, uppercase, lowercase, number, special char)';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+      newErrors.password = 'Password is required';
+    } else {
+      const passwordValidation = validatePassword(formData.password);
+      if (!passwordValidation.isValid) {
+        newErrors.password = passwordValidation.errors.join(', ');
+      }
     }
 
     if (!formData.confirmPassword) {
@@ -302,8 +306,12 @@ const SignupScreen: React.FC = () => {
     signupMutation.mutate(signupData);
   };
 
-  const handleInputChange = (field: keyof SignupData, value: string | boolean) => {
+  const handleInputChange = (
+    field: keyof SignupData,
+    value: string | boolean
+  ) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -382,6 +390,10 @@ const SignupScreen: React.FC = () => {
                 {errors.password && (
                   <Text style={styles.errorText}>{errors.password}</Text>
                 )}
+                <PasswordStrengthIndicator
+                  password={formData.password}
+                  showRequirements={false}
+                />
               </View>
 
               <View style={styles.inputContainer}>
@@ -504,16 +516,20 @@ const SignupScreen: React.FC = () => {
               <View style={styles.privacyToggleContainer}>
                 <View style={styles.privacyToggleRow}>
                   <View style={styles.privacyToggleText}>
-                    <Text style={styles.privacyToggleLabel}>Make gender public</Text>
+                    <Text style={styles.privacyToggleLabel}>
+                      Make gender public
+                    </Text>
                     <Text style={styles.privacyToggleSubtext}>
-                      {formData.showGender 
-                        ? "👁 Other users can see your gender" 
-                        : "🔒 Only you can see your gender"}
+                      {formData.showGender
+                        ? '👁 Other users can see your gender'
+                        : '🔒 Only you can see your gender'}
                     </Text>
                   </View>
                   <Switch
                     value={formData.showGender}
-                    onValueChange={(value) => handleInputChange('showGender', value)}
+                    onValueChange={value =>
+                      handleInputChange('showGender', value)
+                    }
                     trackColor={{ false: '#e1e1e1', true: '#007AFF' }}
                     thumbColor={formData.showGender ? '#ffffff' : '#f4f3f4'}
                   />
@@ -612,18 +628,24 @@ const SignupScreen: React.FC = () => {
               <View style={styles.privacyToggleContainer}>
                 <View style={styles.privacyToggleRow}>
                   <View style={styles.privacyToggleText}>
-                    <Text style={styles.privacyToggleLabel}>Make orientation public</Text>
+                    <Text style={styles.privacyToggleLabel}>
+                      Make orientation public
+                    </Text>
                     <Text style={styles.privacyToggleSubtext}>
-                      {formData.showOrientation 
-                        ? "👁 Other users can see your orientation" 
-                        : "🔒 Only you can see your orientation"}
+                      {formData.showOrientation
+                        ? '👁 Other users can see your orientation'
+                        : '🔒 Only you can see your orientation'}
                     </Text>
                   </View>
                   <Switch
                     value={formData.showOrientation}
-                    onValueChange={(value) => handleInputChange('showOrientation', value)}
+                    onValueChange={value =>
+                      handleInputChange('showOrientation', value)
+                    }
                     trackColor={{ false: '#e1e1e1', true: '#007AFF' }}
-                    thumbColor={formData.showOrientation ? '#ffffff' : '#f4f3f4'}
+                    thumbColor={
+                      formData.showOrientation ? '#ffffff' : '#f4f3f4'
+                    }
                   />
                 </View>
               </View>
@@ -646,7 +668,8 @@ const SignupScreen: React.FC = () => {
                 ) : promptCategories.length === 0 ? (
                   <View style={styles.loadingContainer}>
                     <Text style={styles.errorText}>
-                      Profile prompts could not be loaded. You can still create your account and add prompts later.
+                      Profile prompts could not be loaded. You can still create
+                      your account and add prompts later.
                     </Text>
                   </View>
                 ) : (

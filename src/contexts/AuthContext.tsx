@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { authService } from '../services';
+import { userService } from '../services/userService';
 import { CompleteProfileRequest, UserResponse } from '../types';
 import { platformStorage } from '../utils/platformStorage';
 
@@ -18,6 +19,7 @@ interface AuthContextType {
   googleLogin: (credential: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: UserResponse) => Promise<void>;
+  deleteUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,14 +39,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedUser = await platformStorage.getItem('userData');
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          
+
           // Handle migration: if the stored user has a 'data' property, extract it
           if (parsedUser.data && parsedUser.success) {
             console.log('Migrating user data from old format');
             const migratedUser = parsedUser.data;
             setUser(migratedUser);
             // Update storage with the correct format
-            await platformStorage.setItem('userData', JSON.stringify(migratedUser));
+            await platformStorage.setItem(
+              'userData',
+              JSON.stringify(migratedUser)
+            );
           } else {
             // Already in correct format
             setUser(parsedUser);
@@ -125,6 +130,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const deleteUser = async () => {
+    try {
+      if (!user?.id) {
+        throw new Error('No user logged in');
+      }
+
+      await userService.deleteUser(user.id);
+
+      // Clear user data after successful deletion
+      setUser(null);
+      await platformStorage.removeItem('userData');
+      await platformStorage.removeItem('authToken');
+    } catch (error) {
+      console.error('Failed to delete user account:', error);
+      throw error; // Re-throw so the UI can handle it
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -134,6 +157,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     googleLogin,
     logout,
     updateUser,
+    deleteUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

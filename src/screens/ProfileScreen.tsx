@@ -1,4 +1,5 @@
-import React from 'react';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,11 +8,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { DeleteAccountModal } from '../components/DeleteAccountModal';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProfileScreen: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, deleteUser } = useAuth();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!user) {
     return (
@@ -45,6 +48,19 @@ const ProfileScreen: React.FC = () => {
 
   const formatOrientation = (orientation: string): string => {
     return orientation.charAt(0).toUpperCase() + orientation.slice(1);
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteUser();
+      setShowDeleteModal(false);
+      // User will be automatically redirected to login screen via AuthContext
+    } catch {
+      // Error handling is done in the modal component
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -85,9 +101,19 @@ const ProfileScreen: React.FC = () => {
             {user.gender && (
               <View style={styles.infoRow}>
                 <Text style={styles.label}>Gender</Text>
-                <View style={{flexDirection: 'column', alignItems: 'flex-end', flex: 1}}>
+                <View
+                  style={{
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    flex: 1,
+                  }}>
                   <Text style={styles.value}>{formatGender(user.gender)}</Text>
-                  <Text style={{fontSize: 12, marginTop: 4, color: user.showGender ? '#28a745' : '#dc3545'}}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      marginTop: 4,
+                      color: user.showGender ? '#28a745' : '#dc3545',
+                    }}>
                     {user.showGender ? '👁 Public' : '🔒 Private'}
                   </Text>
                 </View>
@@ -97,11 +123,21 @@ const ProfileScreen: React.FC = () => {
             {user.orientation && (
               <View style={styles.infoRow}>
                 <Text style={styles.label}>Orientation</Text>
-                <View style={{flexDirection: 'column', alignItems: 'flex-end', flex: 1}}>
+                <View
+                  style={{
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    flex: 1,
+                  }}>
                   <Text style={styles.value}>
                     {formatOrientation(user.orientation)}
                   </Text>
-                  <Text style={{fontSize: 12, marginTop: 4, color: user.showOrientation ? '#28a745' : '#dc3545'}}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      marginTop: 4,
+                      color: user.showOrientation ? '#28a745' : '#dc3545',
+                    }}>
                     {user.showOrientation ? '👁 Public' : '🔒 Private'}
                   </Text>
                 </View>
@@ -129,10 +165,9 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => router.push('edit-profile' as any)}
-          >
+            onPress={() => router.push('edit-profile' as any)}>
             <Text style={styles.actionButtonText}>Edit Profile</Text>
           </TouchableOpacity>
 
@@ -151,7 +186,22 @@ const ProfileScreen: React.FC = () => {
               Sign Out
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.dangerButton]}
+            onPress={() => setShowDeleteModal(true)}>
+            <Text style={[styles.actionButtonText, styles.dangerButtonText]}>
+              Delete Account
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        <DeleteAccountModal
+          visible={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteAccount}
+          isDeleting={isDeleting}
+        />
       </ScrollView>
     </SafeAreaView>
   );

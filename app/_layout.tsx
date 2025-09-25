@@ -32,12 +32,12 @@ export default function RootLayout() {
               options={{ presentation: 'modal', title: 'Modal' }}
             />
             <Stack.Screen name="signup" options={{ title: 'Create Account' }} />
-            <Stack.Screen 
-              name="edit-profile" 
-              options={{ 
-                presentation: 'modal', 
-                title: 'Edit Profile' 
-              }} 
+            <Stack.Screen
+              name="edit-profile"
+              options={{
+                presentation: 'modal',
+                title: 'Edit Profile',
+              }}
             />
           </Stack>
           <StatusBar style="auto" />

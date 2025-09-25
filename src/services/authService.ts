@@ -96,11 +96,8 @@ class AuthService {
         promptAnswers: profileData.promptAnswers,
       };
 
-      const response = await apiClient.post<any>(
-        '/users',
-        createUserRequest
-      );
-      
+      const response = await apiClient.post<any>('/users', createUserRequest);
+
       // Backend returns data in format: { data: { user data }, message, success }
       // Extract just the user data
       if (response.data) {

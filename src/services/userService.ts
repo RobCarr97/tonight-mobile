@@ -1,11 +1,11 @@
-import { apiClient, ApiError } from './apiClient';
+import { PromptCategory } from '../constants/promptCategories';
 import {
-  UserResponse,
   UpdateProfileRequest,
   UserFilterRequest,
+  UserResponse,
   UserSearchResult,
 } from '../types';
-import { PromptCategory } from '../constants/promptCategories';
+import { apiClient, ApiError } from './apiClient';
 
 class UserService {
   // Get prompt categories from backend
@@ -125,6 +125,26 @@ class UserService {
         throw error;
       }
       throw new ApiError('Failed to search users', 500, [
+        error instanceof Error ? error.message : 'Unknown error',
+      ]);
+    }
+  }
+
+  // Delete user account (matches OpenAPI DELETE /users/{id} endpoint)
+  async deleteUser(userId: string): Promise<void> {
+    try {
+      if (!userId || userId === 'undefined') {
+        throw new ApiError('User ID is required for account deletion', 400, [
+          'Invalid user ID',
+        ]);
+      }
+
+      await apiClient.delete(`/users/${userId}`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError('Failed to delete user account', 500, [
         error instanceof Error ? error.message : 'Unknown error',
       ]);
     }

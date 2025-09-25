@@ -16,10 +16,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PROMPT_CATEGORIES } from '../constants/promptCategories';
 import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services';
-import { Gender, Orientation, UpdateProfileRequest, UserPromptAnswer } from '../types';
-import { PROMPT_CATEGORIES } from '../constants/promptCategories';
+import {
+  Gender,
+  Orientation,
+  UpdateProfileRequest,
+  UserPromptAnswer,
+} from '../types';
 
 interface EditProfileData {
   dob: string;
@@ -33,7 +38,7 @@ interface EditProfileData {
 const EditProfileScreen: React.FC = () => {
   const { user, updateUser } = useAuth();
   const params = useLocalSearchParams();
-  
+
   const [formData, setFormData] = useState<EditProfileData>({
     dob: user?.dob || '',
     gender: user?.gender || 'other',
@@ -72,29 +77,33 @@ const EditProfileScreen: React.FC = () => {
       setFormData(prevFormData => {
         const updatedFormData = { ...prevFormData };
         let hasChanges = false;
-        
+
         if (params.gender && typeof params.gender === 'string') {
           updatedFormData.gender = params.gender as Gender;
           hasChanges = true;
         }
-        
+
         if (params.orientation && typeof params.orientation === 'string') {
           updatedFormData.orientation = params.orientation as Orientation;
           hasChanges = true;
         }
-        
+
         if (params.showGender !== undefined) {
-          const showGenderValue = Array.isArray(params.showGender) ? params.showGender[0] : params.showGender;
+          const showGenderValue = Array.isArray(params.showGender)
+            ? params.showGender[0]
+            : params.showGender;
           updatedFormData.showGender = showGenderValue === 'true';
           hasChanges = true;
         }
-        
+
         if (params.showOrientation !== undefined) {
-          const showOrientationValue = Array.isArray(params.showOrientation) ? params.showOrientation[0] : params.showOrientation;
+          const showOrientationValue = Array.isArray(params.showOrientation)
+            ? params.showOrientation[0]
+            : params.showOrientation;
           updatedFormData.showOrientation = showOrientationValue === 'true';
           hasChanges = true;
         }
-        
+
         if (params.dob && typeof params.dob === 'string') {
           updatedFormData.dob = params.dob;
           setDateOfBirth(new Date(params.dob));
@@ -114,7 +123,7 @@ const EditProfileScreen: React.FC = () => {
       const updatedUser = await userService.updateProfile(user.id, data);
       return updatedUser;
     },
-    onSuccess: (updatedUser) => {
+    onSuccess: updatedUser => {
       updateUser(updatedUser);
       Alert.alert('Success', 'Profile updated successfully!', [
         {
@@ -198,11 +207,17 @@ const EditProfileScreen: React.FC = () => {
     setShowDatePicker(true);
   };
 
-  const handlePromptAnswerChange = (categoryId: string, questionId: string, answer: string) => {
+  const handlePromptAnswerChange = (
+    categoryId: string,
+    questionId: string,
+    answer: string
+  ) => {
     setFormData(prevData => {
       const updatedPromptAnswers = [...prevData.promptAnswers];
       const existingAnswerIndex = updatedPromptAnswers.findIndex(
-        (promptAnswer) => promptAnswer.categoryId === categoryId && promptAnswer.questionId === questionId
+        promptAnswer =>
+          promptAnswer.categoryId === categoryId &&
+          promptAnswer.questionId === questionId
       );
 
       if (existingAnswerIndex >= 0) {
@@ -281,7 +296,9 @@ const EditProfileScreen: React.FC = () => {
                       !formData.dob && styles.placeholderText,
                     ]}>
                     {formData.dob
-                      ? `${formData.dob} (${calculateAge(formData.dob)} years old)`
+                      ? `${formData.dob} (${calculateAge(
+                          formData.dob
+                        )} years old)`
                       : 'Select date of birth'}
                   </Text>
                 </TouchableOpacity>
@@ -314,8 +331,7 @@ const EditProfileScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.pickerText,
-                        formData.gender === 'male' &&
-                          styles.selectedPickerText,
+                        formData.gender === 'male' && styles.selectedPickerText,
                       ]}>
                       Male
                     </Text>
@@ -338,8 +354,7 @@ const EditProfileScreen: React.FC = () => {
                   <TouchableOpacity
                     style={[
                       styles.pickerButton,
-                      formData.gender === 'non-binary' &&
-                        styles.selectedPicker,
+                      formData.gender === 'non-binary' && styles.selectedPicker,
                     ]}
                     onPress={() => handleInputChange('gender', 'non-binary')}>
                     <Text
@@ -488,9 +503,7 @@ const EditProfileScreen: React.FC = () => {
                       formData.orientation === 'asexual' &&
                         styles.selectedPicker,
                     ]}
-                    onPress={() =>
-                      handleInputChange('orientation', 'asexual')
-                    }>
+                    onPress={() => handleInputChange('orientation', 'asexual')}>
                     <Text
                       style={[
                         styles.pickerText,
@@ -503,8 +516,7 @@ const EditProfileScreen: React.FC = () => {
                   <TouchableOpacity
                     style={[
                       styles.pickerButton,
-                      formData.orientation === 'other' &&
-                        styles.selectedPicker,
+                      formData.orientation === 'other' && styles.selectedPicker,
                     ]}
                     onPress={() => handleInputChange('orientation', 'other')}>
                     <Text
@@ -551,23 +563,33 @@ const EditProfileScreen: React.FC = () => {
                 <Text style={styles.sectionSubtitle}>
                   Edit your prompt answers to help others get to know you better
                 </Text>
-                
-                {PROMPT_CATEGORIES.map((category) => (
+
+                {PROMPT_CATEGORIES.map(category => (
                   <View key={category.id} style={styles.categoryContainer}>
                     <Text style={styles.categoryTitle}>{category.name}</Text>
-                    {category.questions.map((question) => {
+                    {category.questions.map(question => {
                       const existingAnswer = formData.promptAnswers.find(
-                        (answer) => answer.categoryId === category.id && answer.questionId === question.id
+                        answer =>
+                          answer.categoryId === category.id &&
+                          answer.questionId === question.id
                       );
-                      
+
                       return (
                         <View key={question.id} style={styles.promptContainer}>
-                          <Text style={styles.promptQuestion}>{question.question}</Text>
+                          <Text style={styles.promptQuestion}>
+                            {question.question}
+                          </Text>
                           <TextInput
                             style={styles.promptInput}
                             placeholder="Your answer..."
                             value={existingAnswer?.answer || ''}
-                            onChangeText={(text) => handlePromptAnswerChange(category.id, question.id, text)}
+                            onChangeText={text =>
+                              handlePromptAnswerChange(
+                                category.id,
+                                question.id,
+                                text
+                              )
+                            }
                             multiline
                             numberOfLines={3}
                             maxLength={200}
