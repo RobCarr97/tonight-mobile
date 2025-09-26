@@ -66,7 +66,7 @@ export interface SignupResponse {
 
 // Login Request Interface (matches OpenAPI LoginRequest schema)
 export interface LoginRequest {
-  email: string;
+  identifier: string; // Username or email address for login
   password: string;
 }
 

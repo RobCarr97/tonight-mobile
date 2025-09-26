@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PROMPT_CATEGORIES } from '../constants/promptCategories';
 import { useAuth } from '../contexts/AuthContext';
 import { userService } from '../services';
 import {
@@ -222,18 +221,41 @@ const EditProfileScreen: React.FC = () => {
 
       if (existingAnswerIndex >= 0) {
         // Update existing answer
-        updatedPromptAnswers[existingAnswerIndex] = {
-          ...updatedPromptAnswers[existingAnswerIndex],
-          answer,
-        };
-      } else {
-        // Add new answer
+        if (answer.trim() === '') {
+          // Remove answer if empty
+          updatedPromptAnswers.splice(existingAnswerIndex, 1);
+        } else {
+          // Update existing answer
+          updatedPromptAnswers[existingAnswerIndex] = {
+            ...updatedPromptAnswers[existingAnswerIndex],
+            answer,
+          };
+        }
+      } else if (answer.trim() !== '') {
+        // Add new answer only if it's not empty
         updatedPromptAnswers.push({
           categoryId,
           questionId,
           answer,
         });
       }
+
+      return {
+        ...prevData,
+        promptAnswers: updatedPromptAnswers,
+      };
+    });
+  };
+
+  const handleRemovePromptAnswer = (categoryId: string, questionId: string) => {
+    setFormData(prevData => {
+      const updatedPromptAnswers = prevData.promptAnswers.filter(
+        promptAnswer =>
+          !(
+            promptAnswer.categoryId === categoryId &&
+            promptAnswer.questionId === questionId
+          )
+      );
 
       return {
         ...prevData,
@@ -561,44 +583,79 @@ const EditProfileScreen: React.FC = () => {
               <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>About Me</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Edit your prompt answers to help others get to know you better
+                  Answer these 3 prompts to help others get to know you better (
+                  {formData.promptAnswers.length}/3 answered)
                 </Text>
 
-                {PROMPT_CATEGORIES.map(category => (
-                  <View key={category.id} style={styles.categoryContainer}>
-                    <Text style={styles.categoryTitle}>{category.name}</Text>
-                    {category.questions.map(question => {
-                      const existingAnswer = formData.promptAnswers.find(
-                        answer =>
-                          answer.categoryId === category.id &&
-                          answer.questionId === question.id
-                      );
+                {/* Display exactly 3 selected prompts */}
+                {(() => {
+                  const selectedPrompts = [
+                    {
+                      categoryId: 'icebreakers',
+                      questionId: 'two-truths-lie',
+                      question: 'Two truths and a lie…',
+                    },
+                    {
+                      categoryId: 'bar-nightlife',
+                      questionId: 'drink-order',
+                      question: 'My go-to drink order is…',
+                    },
+                    {
+                      categoryId: 'personality-lifestyle',
+                      questionId: 'cant-stop-talking',
+                      question: "One thing I can't stop talking about is…",
+                    },
+                  ];
 
-                      return (
-                        <View key={question.id} style={styles.promptContainer}>
+                  return selectedPrompts.map((prompt, index) => {
+                    const existingAnswer = formData.promptAnswers.find(
+                      answer =>
+                        answer.categoryId === prompt.categoryId &&
+                        answer.questionId === prompt.questionId
+                    );
+
+                    return (
+                      <View
+                        key={`${prompt.categoryId}-${prompt.questionId}`}
+                        style={styles.promptContainer}>
+                        <View style={styles.promptHeader}>
                           <Text style={styles.promptQuestion}>
-                            {question.question}
+                            {prompt.question}
                           </Text>
-                          <TextInput
-                            style={styles.promptInput}
-                            placeholder="Your answer..."
-                            value={existingAnswer?.answer || ''}
-                            onChangeText={text =>
-                              handlePromptAnswerChange(
-                                category.id,
-                                question.id,
-                                text
-                              )
-                            }
-                            multiline
-                            numberOfLines={3}
-                            maxLength={200}
-                          />
+                          {existingAnswer && (
+                            <TouchableOpacity
+                              style={styles.removePromptButton}
+                              onPress={() =>
+                                handleRemovePromptAnswer(
+                                  prompt.categoryId,
+                                  prompt.questionId
+                                )
+                              }>
+                              <Text style={styles.removePromptButtonText}>
+                                ✕
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
-                      );
-                    })}
-                  </View>
-                ))}
+                        <TextInput
+                          style={styles.promptInput}
+                          placeholder="Your answer..."
+                          value={existingAnswer?.answer || ''}
+                          onChangeText={text =>
+                            handlePromptAnswerChange(
+                              prompt.categoryId,
+                              prompt.questionId,
+                              text
+                            )
+                          }
+                          multiline
+                          numberOfLines={3}
+                          maxLength={200}
+                        />
+                      </View>
+                    );
+                  });
+                })()}
               </View>
 
               {/* Save Button */}
@@ -805,6 +862,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlignVertical: 'top',
     minHeight: 80,
+  },
+  promptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  removePromptButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  removePromptButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

@@ -75,7 +75,7 @@ export interface DateRequestResponse {
 export interface DateEventsInAreaRequest {
   lat: number;
   lng: number;
-  radius: number; // radius in kilometers
+  radius: number; // radius in meters (accepts float values between 1 and 100000)
   requestingUserId: string;
   minAge?: number; // Optional minimum age filter
   maxAge?: number; // Optional maximum age filter

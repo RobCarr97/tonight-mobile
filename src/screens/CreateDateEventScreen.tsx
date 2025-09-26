@@ -109,31 +109,51 @@ export default function CreateDateEventScreen() {
       formData.eventDate, // Include event date for date-based filtering
     ],
     queryFn: async () => {
-      // Use location-based search if user location is available and enabled
-      if (useCurrentLocation && userLocation) {
-        return await venueService.getBars({
-          lat: userLocation.lat,
-          lng: userLocation.lng,
-          radius: searchRadius * 1000, // Convert km to meters for API
-          venueTypes:
-            selectedVenueTypes.length > 0 ? selectedVenueTypes : undefined,
-          eventDate: formData.eventDate || undefined, // Include event date for filtering
+      try {
+        console.log('Venues query triggered:', {
+          useCurrentLocation,
+          userLocation,
+          selectedCity,
+          selectedVenueTypes,
+          searchRadius,
         });
-      }
 
-      // Use city-based search if city is selected
-      if (selectedCity) {
-        return await venueService.getBars({
-          city: selectedCity,
-          radius: searchRadius * 1000, // Convert km to meters for API
-          venueTypes:
-            selectedVenueTypes.length > 0 ? selectedVenueTypes : undefined,
-          eventDate: formData.eventDate || undefined, // Include event date for filtering
-        });
-      }
+        // Use location-based search if user location is available and enabled
+        if (useCurrentLocation && userLocation) {
+          console.log('Fetching venues by location:', userLocation);
+          const venues = await venueService.getBars({
+            lat: userLocation.lat,
+            lng: userLocation.lng,
+            radius: searchRadius * 1000, // Convert km to meters for API
+            venueTypes:
+              selectedVenueTypes.length > 0 ? selectedVenueTypes : undefined,
+            eventDate: formData.eventDate || undefined, // Include event date for filtering
+          });
+          console.log('Venues found by location:', venues.length);
+          return venues;
+        }
 
-      // Return empty array if no location/city selected
-      return [];
+        // Use city-based search if city is selected
+        if (selectedCity) {
+          console.log('Fetching venues by city:', selectedCity);
+          const venues = await venueService.getBars({
+            city: selectedCity,
+            radius: searchRadius * 1000, // Convert km to meters for API
+            venueTypes:
+              selectedVenueTypes.length > 0 ? selectedVenueTypes : undefined,
+            eventDate: formData.eventDate || undefined, // Include event date for filtering
+          });
+          console.log('Venues found by city:', venues.length);
+          return venues;
+        }
+
+        // Return empty array if no location/city selected
+        console.log('No location or city selected, returning empty array');
+        return [];
+      } catch (error) {
+        console.error('Venues query error:', error);
+        throw error;
+      }
     },
     enabled:
       (useCurrentLocation && userLocation !== null) || selectedCity.length > 0,
@@ -374,9 +394,13 @@ export default function CreateDateEventScreen() {
                     ? selectedVenue.name
                     : venuesQuery.isLoading
                     ? 'Loading venues...'
+                    : venuesQuery.error
+                    ? 'Error loading venues'
                     : !useCurrentLocation && !selectedCity
                     ? 'Please select location first'
-                    : venuesQuery.data && venuesQuery.data.length === 0
+                    : venuesQuery.data &&
+                      Array.isArray(venuesQuery.data) &&
+                      venuesQuery.data.length === 0
                     ? 'No venues available'
                     : 'Choose a venue'}
                 </Text>
@@ -410,48 +434,53 @@ export default function CreateDateEventScreen() {
                     </View>
                   )}
 
-                  {venuesQuery.data && venuesQuery.data.length > 0 && (
-                    <ScrollView
-                      style={styles.dropdownList}
-                      nestedScrollEnabled={true}>
-                      {venuesQuery.data
-                        .filter(
-                          (venue: Bar, index: number, array: Bar[]) =>
-                            // Remove duplicates by keeping only the first occurrence of each ID
-                            array.findIndex(v => v.id === venue.id) === index
-                        )
-                        .map((venue: Bar, index: number) => (
-                          <TouchableOpacity
-                            key={`venue-${venue.id}-${index}`}
-                            style={[
-                              styles.dropdownItem,
-                              selectedVenue?.id === venue.id &&
-                                styles.dropdownItemSelected,
-                            ]}
-                            onPress={() => {
-                              handleVenueSelect(venue);
-                              setShowVenueDropdown(false);
-                            }}>
-                            <Text style={styles.dropdownItemName}>
-                              {venue.name}
-                            </Text>
-                            <Text style={styles.dropdownItemAddress}>
-                              {venue.address}
-                            </Text>
-                            {venue.rating && (
-                              <Text style={styles.dropdownItemRating}>
-                                ⭐ {venue.rating.toFixed(1)}
+                  {venuesQuery.data &&
+                    Array.isArray(venuesQuery.data) &&
+                    venuesQuery.data.length > 0 && (
+                      <ScrollView
+                        style={styles.dropdownList}
+                        nestedScrollEnabled={true}>
+                        {(venuesQuery.data as Bar[])
+                          .filter(
+                            (venue: Bar, index: number, array: Bar[]) =>
+                              // Remove duplicates by keeping only the first occurrence of each ID
+                              array.findIndex(v => v.id === venue.id) === index
+                          )
+                          .map((venue: Bar, index: number) => (
+                            <TouchableOpacity
+                              key={`venue-${venue.id}-${index}`}
+                              style={[
+                                styles.dropdownItem,
+                                selectedVenue?.id === venue.id &&
+                                  styles.dropdownItemSelected,
+                              ]}
+                              onPress={() => {
+                                handleVenueSelect(venue);
+                                setShowVenueDropdown(false);
+                              }}>
+                              <Text style={styles.dropdownItemName}>
+                                {venue.name}
                               </Text>
-                            )}
-                            {selectedVenue?.id === venue.id && (
-                              <Text style={styles.dropdownItemSelected}>✓</Text>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                  )}
+                              <Text style={styles.dropdownItemAddress}>
+                                {venue.address}
+                              </Text>
+                              {venue.rating && (
+                                <Text style={styles.dropdownItemRating}>
+                                  ⭐ {venue.rating.toFixed(1)}
+                                </Text>
+                              )}
+                              {selectedVenue?.id === venue.id && (
+                                <Text style={styles.dropdownItemSelected}>
+                                  ✓
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                      </ScrollView>
+                    )}
 
                   {venuesQuery.data &&
+                    Array.isArray(venuesQuery.data) &&
                     venuesQuery.data.length === 0 &&
                     !venuesQuery.isLoading && (
                       <View style={styles.dropdownEmptyContainer}>
@@ -460,6 +489,14 @@ export default function CreateDateEventScreen() {
                         </Text>
                       </View>
                     )}
+
+                  {venuesQuery.error && (
+                    <View style={styles.dropdownEmptyContainer}>
+                      <Text style={styles.dropdownEmptyText}>
+                        Error: {venuesQuery.error.message}
+                      </Text>
+                    </View>
+                  )}
 
                   {!useCurrentLocation && !selectedCity && (
                     <View style={styles.dropdownEmptyContainer}>

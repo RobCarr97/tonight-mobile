@@ -114,6 +114,11 @@ class UserService {
         filters.venueTypes.forEach(type =>
           queryParams.append('venueTypes', type)
         );
+      } else {
+        // Default to all venue types when none specified
+        ['bar', 'restaurant', 'coffee-shop'].forEach(type =>
+          queryParams.append('venueTypes', type)
+        );
       }
 
       const endpoint = `/users/search${

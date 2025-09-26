@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import * as Location from 'expo-location';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -29,87 +29,238 @@ const FindCompatibleDatesScreen: React.FC = () => {
     longitudeDelta: 0.1,
   });
 
-  const [searchRadius, setSearchRadius] = useState(10); // km
   const [minAge, setMinAge] = useState('');
   const [maxAge, setMaxAge] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<DateEvent | null>(null);
+  const [hasUserLocation, setHasUserLocation] = useState(false);
+  const [userCoordinates, setUserCoordinates] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
-  // Get user's current location
+  // Get user's current location on initial load
   useEffect(() => {
     (async () => {
       try {
+        console.log('Requesting location permissions...');
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
+          console.log('Location permission denied');
           Alert.alert(
-            'Permission denied',
-            'Location permission is required to find nearby dates'
+            'Location Permission',
+            'Location permission is helpful to find nearby dates, but you can still use the app by manually navigating the map.'
           );
           return;
         }
 
-        let location = await Location.getCurrentPositionAsync({});
+        console.log('Getting current position...');
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        console.log('User location obtained:', location.coords);
+
         const newRegion = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 0.05,
+          latitudeDelta: 0.05, // ~5km view
           longitudeDelta: 0.05,
         };
-        setRegion(newRegion);
 
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
+        console.log('Setting initial region to user location:', newRegion);
+        setRegion(newRegion);
+        setHasUserLocation(true);
+        setUserCoordinates({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        // Use a longer delay to ensure the map component is fully rendered
+        setTimeout(() => {
+          if (mapRef.current) {
+            console.log('Animating to user location...');
+            mapRef.current.animateToRegion(newRegion, 1500);
+          }
+        }, 1000);
       } catch (error) {
         console.error('Error getting location:', error);
-        Alert.alert('Location Error', 'Could not get your current location');
+        console.log('Continuing with default Manchester location');
+        // Continue with default Manchester location - no need to show error
       }
     })();
   }, []);
 
   // Build search parameters
+  // Calculate radius based on current map view (use the larger of lat/lng delta)
+  const latRadiusMeters = (region.latitudeDelta * 111000) / 2; // Convert latitude degrees to meters
+  const lngRadiusMeters =
+    (region.longitudeDelta *
+      111000 *
+      Math.cos((region.latitude * Math.PI) / 180)) /
+    2;
+  const mapViewRadius = Math.max(latRadiusMeters, lngRadiusMeters);
+
+  // Use reasonable bounds for the radius
+  const minRadius = 1000; // Minimum 1km
+  const maxRadius = 100000; // Maximum 100km (matches API limit and zoom constraint)
+
+  // Use map view radius, but cap it within reasonable bounds
+  const effectiveRadius = Math.min(
+    Math.max(minRadius, mapViewRadius),
+    maxRadius
+  );
+
+  console.log('=== RADIUS CALCULATION DEBUG ===');
+  console.log(
+    'Region deltas - lat:',
+    region.latitudeDelta.toFixed(6),
+    'lng:',
+    region.longitudeDelta.toFixed(6)
+  );
+  console.log('Lat radius (m):', latRadiusMeters.toFixed(0));
+  console.log('Lng radius (m):', lngRadiusMeters.toFixed(0));
+  console.log('Map view radius (m):', mapViewRadius.toFixed(0));
+  console.log('Effective radius (m):', effectiveRadius);
+  console.log('Effective radius (km):', (effectiveRadius / 1000).toFixed(1));
+
   const searchParams: DateEventsInAreaRequest = {
     lat: region.latitude,
     lng: region.longitude,
-    radius: searchRadius * 1000, // Convert km to meters for backend API
-    requestingUserId: user?.id || user?.username || '',
+    radius: effectiveRadius, // API now accepts float values in meters
+    requestingUserId: user?.id || user?.username || user?.email || '',
     ...(minAge && { minAge: parseInt(minAge) }),
     ...(maxAge && { maxAge: parseInt(maxAge) }),
-    excludeRequested: true, // Don't show events user has already requested
+    excludeRequested: false,
   };
 
-  // Query for compatible date events in area
-  const {
-    data: compatibleEvents = [],
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['compatibleDates', searchParams],
-    queryFn: () => dateEventService.getDateEventsInArea(searchParams),
-    enabled: !!user && !!searchParams.requestingUserId,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+  // Try a simpler query approach first
+  const simpleQuery = useQuery<DateEvent[], Error>({
+    queryKey: [
+      'compatibleDates',
+      Math.round(region.latitude * 100) / 100, // Round to 2 decimal places for more stability (~1km precision)
+      Math.round(region.longitude * 100) / 100,
+      Math.round(effectiveRadius / 5000) * 5, // Round to nearest 5km for stability (in meters)
+      user?.id,
+      minAge,
+      maxAge,
+    ],
+    queryFn: async () => {
+      try {
+        console.log('=== QUERY EXECUTION ===');
+        console.log('Calling dateEventService.getDateEventsInArea with:', {
+          ...searchParams,
+          radius: `${(searchParams.radius / 1000).toFixed(1)}km (${
+            searchParams.radius
+          }m)`,
+        });
+
+        // Validate parameters before making the call
+        if (!searchParams.lat || !searchParams.lng) {
+          throw new Error(
+            'Invalid coordinates: lat=' +
+              searchParams.lat +
+              ', lng=' +
+              searchParams.lng
+          );
+        }
+        if (!searchParams.radius || searchParams.radius <= 0) {
+          throw new Error('Invalid radius: ' + searchParams.radius + 'm');
+        }
+        if (searchParams.radius > maxRadius) {
+          throw new Error(
+            'Radius too large: ' +
+              (searchParams.radius / 1000).toFixed(1) +
+              'km (max: ' +
+              maxRadius / 1000 +
+              'km)'
+          );
+        }
+        if (!searchParams.requestingUserId) {
+          throw new Error('Invalid user ID: ' + searchParams.requestingUserId);
+        }
+
+        const result = await dateEventService.getDateEventsInArea(searchParams);
+        console.log('Query successful, returned:', result?.length, 'events');
+        return result;
+      } catch (error) {
+        console.error('=== QUERY FAILED ===');
+        console.error('Query error:', error);
+        console.error(
+          'Error message:',
+          error instanceof Error ? error.message : String(error)
+        );
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+    },
+    enabled: !!user?.id && region.latitudeDelta <= 1.8, // Disable if zoomed out beyond 100km radius
+    staleTime: 10000, // 10 seconds - more frequent updates for hot reload
+    refetchInterval: 15000, // Auto-refetch every 15 seconds (hot reload)
+    retry: false,
   });
+
+  const compatibleEvents = useMemo((): DateEvent[] => {
+    console.log('=== SIMPLE QUERY STATE ===');
+    console.log('Simple query data:', simpleQuery.data);
+    console.log('Simple query status:', simpleQuery.status);
+    console.log('Simple query error:', simpleQuery.error);
+
+    // Log more detailed error information
+    if (simpleQuery.error) {
+      console.error('=== DETAILED ERROR INFO ===');
+      console.error('Error object:', simpleQuery.error);
+      console.error(
+        'Error message:',
+        simpleQuery.error instanceof Error
+          ? simpleQuery.error.message
+          : String(simpleQuery.error)
+      );
+      console.error(
+        'Error stack:',
+        simpleQuery.error instanceof Error
+          ? simpleQuery.error.stack
+          : 'No stack trace'
+      );
+      console.error(
+        'Error name:',
+        simpleQuery.error instanceof Error ? simpleQuery.error.name : 'Unknown'
+      );
+      console.error(
+        'Full error JSON:',
+        JSON.stringify(simpleQuery.error, null, 2)
+      );
+    }
+
+    return (simpleQuery.data as DateEvent[]) || [];
+  }, [simpleQuery.data, simpleQuery.status, simpleQuery.error]);
+
+  // Use simpleQuery properties
+  const { error, refetch } = simpleQuery;
 
   // Debug logging
   console.log('=== RENDER DEBUG ===');
   console.log('Search params:', searchParams);
+  console.log('Compatible events from React Query:', compatibleEvents);
   console.log('Compatible events count:', compatibleEvents.length);
   console.log('Map region:', region);
   console.log('Query error:', error);
+  console.log('User:', user);
+  console.log('Query enabled:', !!user?.id);
 
-  // Debug marker coordinates
+  // Debug marker coordinates and full event data
   compatibleEvents.forEach((event, index) => {
-    console.log(`Event ${index}:`, {
+    console.log(`Event ${index} (${event.id}):`, {
       id: event.id,
+      hostUserId: event.hostUserId,
       lat: event.lat,
       lng: event.lng,
       venue: event.venue,
       bar: event.bar,
-      withinRegion:
-        event.lat && event.lng
-          ? Math.abs(event.lat - region.latitude) <= region.latitudeDelta / 2 &&
-            Math.abs(event.lng - region.longitude) <= region.longitudeDelta / 2
-          : false,
+      eventDate: event.eventDate,
+      eventTime: event.eventTime,
+      isOpen: event.isOpen,
+      status: event.status,
+      fullEvent: event,
     });
   });
 
@@ -130,18 +281,17 @@ const FindCompatibleDatesScreen: React.FC = () => {
     },
   });
 
-  // Force map to update when events are loaded
+  // Note: Removed forced map updates to allow proper user location focusing
+
+  // Debug helper: Log all raw API data
   useEffect(() => {
-    if (compatibleEvents.length > 0 && mapRef.current) {
-      console.log('Events loaded, forcing map update');
-      // Small delay to ensure map is ready
-      setTimeout(() => {
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(region, 100);
-        }
-      }, 500);
+    if (compatibleEvents.length > 0) {
+      console.log('=== RAW API DATA DEBUG ===');
+      compatibleEvents.forEach((event, i) => {
+        console.log(`Raw event ${i}:`, JSON.stringify(event, null, 2));
+      });
     }
-  }, [compatibleEvents.length, region]);
+  }, [compatibleEvents]);
 
   const handleJoinEvent = (eventId: string) => {
     Alert.alert(
@@ -251,33 +401,6 @@ const FindCompatibleDatesScreen: React.FC = () => {
         </View>
 
         <View style={styles.filtersContent}>
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Search Radius</Text>
-            <Text style={styles.filterSublabel}>
-              Current radius: {searchRadius}km
-            </Text>
-            <View style={styles.radiusContainer}>
-              {[1, 5, 10, 20, 50].map(radius => (
-                <TouchableOpacity
-                  key={radius}
-                  style={[
-                    styles.radiusOption,
-                    searchRadius === radius && styles.radiusOptionSelected,
-                  ]}
-                  onPress={() => setSearchRadius(radius)}>
-                  <Text
-                    style={[
-                      styles.radiusOptionText,
-                      searchRadius === radius &&
-                        styles.radiusOptionTextSelected,
-                    ]}>
-                    {radius}km
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
           <View style={styles.filterRow}>
             <Text style={styles.filterLabel}>Min Age</Text>
             <TextInput
@@ -329,89 +452,166 @@ const FindCompatibleDatesScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <TonightLogo size="small" />
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowFilters(true)}>
-          <Text style={styles.filterButtonText}>⚙️ Filters</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowFilters(true)}>
+            <Text style={styles.filterButtonText}>⚙️ Filters</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <MapView
         ref={mapRef}
         style={styles.map}
         region={region}
-        onRegionChangeComplete={setRegion}
-        showsUserLocation={true}
-        showsMyLocationButton={true}>
-        {compatibleEvents
-          .map((event, index) => {
-            // Check if coordinates exist and are valid numbers
+        onRegionChange={newRegion => {
+          // Only allow zoom changes, prevent panning by keeping center fixed to user location
+          if (hasUserLocation && userCoordinates) {
+            // Keep the center fixed to the original user location, allow zoom changes
+            const correctedRegion = {
+              latitude: userCoordinates.latitude,
+              longitude: userCoordinates.longitude,
+              latitudeDelta: newRegion.latitudeDelta,
+              longitudeDelta: newRegion.longitudeDelta,
+            };
+
+            // Limit zoom out to 100km radius
+            const maxLatitudeDelta = 1.8;
+            const maxLongitudeDelta = 1.8;
+
             if (
-              !event.lat ||
-              !event.lng ||
-              typeof event.lat !== 'number' ||
-              typeof event.lng !== 'number' ||
-              isNaN(event.lat) ||
-              isNaN(event.lng)
+              correctedRegion.latitudeDelta > maxLatitudeDelta ||
+              correctedRegion.longitudeDelta > maxLongitudeDelta
             ) {
-              return null;
+              const constrainedRegion = {
+                latitude: userCoordinates.latitude,
+                longitude: userCoordinates.longitude,
+                latitudeDelta: Math.min(
+                  correctedRegion.latitudeDelta,
+                  maxLatitudeDelta
+                ),
+                longitudeDelta: Math.min(
+                  correctedRegion.longitudeDelta,
+                  maxLongitudeDelta
+                ),
+              };
+              mapRef.current?.animateToRegion(constrainedRegion, 200);
+            } else {
+              // Apply the corrected region if within zoom limits
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(correctedRegion, 100);
+              }
             }
+          } else {
+            // If no user location, allow normal map behavior with zoom limits
+            const maxLatitudeDelta = 1.8;
+            const maxLongitudeDelta = 1.8;
 
-            const venueName =
-              event.venue?.name || event.bar?.name || 'Unknown Venue';
-            const eventTitle = `${venueName}`;
-            const eventDescription = `${formatEventDateTime(
-              event.eventDate,
-              event.eventTime
-            )}`;
+            if (
+              newRegion.latitudeDelta > maxLatitudeDelta ||
+              newRegion.longitudeDelta > maxLongitudeDelta
+            ) {
+              const constrainedRegion = {
+                ...newRegion,
+                latitudeDelta: Math.min(
+                  newRegion.latitudeDelta,
+                  maxLatitudeDelta
+                ),
+                longitudeDelta: Math.min(
+                  newRegion.longitudeDelta,
+                  maxLongitudeDelta
+                ),
+              };
+              mapRef.current?.animateToRegion(constrainedRegion, 200);
+            }
+          }
+        }}
+        onRegionChangeComplete={newRegion => {
+          // Always keep the center fixed to user location when we have it
+          if (hasUserLocation && userCoordinates) {
+            const correctedRegion = {
+              ...newRegion,
+              latitude: userCoordinates.latitude,
+              longitude: userCoordinates.longitude,
+            };
+            setRegion(correctedRegion);
+          } else {
+            setRegion(newRegion);
+          }
+        }}
+        scrollEnabled={true}
+        zoomEnabled={true}
+        rotateEnabled={false}
+        pitchEnabled={false}
+        showsUserLocation={false}
+        showsMyLocationButton={false}>
+        {compatibleEvents.map((event, index) => {
+          console.log(`Rendering marker ${index} for event ${event.id}:`, {
+            lat: event.lat,
+            lng: event.lng,
+            hasValidCoordinates: event.lat != null && event.lng != null,
+            coordinateTypes: { lat: typeof event.lat, lng: typeof event.lng },
+            latValue: event.lat,
+            lngValue: event.lng,
+          });
 
-            return (
-              <Marker
-                key={`event-${event.id}-${index}`}
-                coordinate={{
-                  latitude: Number(event.lat),
-                  longitude: Number(event.lng),
-                }}
-                title={eventTitle}
-                description={eventDescription}
-                pinColor="red"
-                onPress={() => {
-                  console.log('Marker pressed for event:', event.id);
-                  setSelectedEvent(event);
-                }}
-              />
-            );
-          })
-          .filter(Boolean)}
+          const venueName =
+            event.venue?.name || event.bar?.name || 'Unknown Venue';
+          const eventTitle = `${venueName}`;
+          const eventDescription = `${formatEventDateTime(
+            event.eventDate,
+            event.eventTime
+          )}`;
+
+          console.log(`Marker details for event ${event.id}:`, {
+            venueName,
+            eventTitle,
+            eventDescription,
+            coordinateForMarker: {
+              latitude: event.lat!,
+              longitude: event.lng!,
+            },
+          });
+
+          return (
+            <Marker
+              key={`event-${event.id}-${index}`}
+              coordinate={{
+                latitude: event.lat!,
+                longitude: event.lng!,
+              }}
+              title={eventTitle}
+              description={eventDescription}
+              pinColor="red"
+              onPress={() => {
+                console.log('Marker pressed for event:', event.id);
+                setSelectedEvent(event);
+              }}
+            />
+          );
+        })}
+
+        {/* User location marker removed - map centers directly on user location */}
       </MapView>
 
       {/* Status Indicator */}
       <View style={styles.statusIndicator}>
-        <Text style={styles.statusText}>
-          {compatibleEvents.length} events found •{' '}
-          {compatibleEvents.filter(e => e.lat && e.lng).length} on map
-        </Text>
-        {compatibleEvents.length > 0 && (
-          <TouchableOpacity
-            style={styles.centerButton}
-            onPress={() => {
-              const firstEvent = compatibleEvents[0];
-              if (firstEvent.lat && firstEvent.lng && mapRef.current) {
-                console.log('Centering map on first event:', {
-                  lat: firstEvent.lat,
-                  lng: firstEvent.lng,
-                });
-                const newRegion = {
-                  latitude: firstEvent.lat,
-                  longitude: firstEvent.lng,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                };
-                mapRef.current.animateToRegion(newRegion, 1000);
-              }
-            }}>
-            <Text style={styles.centerButtonText}>Center on Event</Text>
-          </TouchableOpacity>
+        {region.latitudeDelta > 1.8 ? (
+          <Text style={styles.statusText}>
+            Zoom in to search for events (max zoom: 100km radius)
+          </Text>
+        ) : (
+          <Text style={styles.statusText}>
+            {compatibleEvents.length} events found (radius:{' '}
+            {(effectiveRadius / 1000).toFixed(1)}km • zoom to adjust)
+            {simpleQuery.isFetching && ' 🔄'}
+          </Text>
+        )}
+        {error && (
+          <Text style={[styles.statusText, { color: 'red' }]}>
+            Error: {String(error)}
+          </Text>
         )}
       </View>
 
@@ -600,36 +800,23 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 12,
   },
-  radiusContainer: {
+  // Filter button styles
+  headerButtons: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 8,
-  },
-  radiusOption: {
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 50,
     alignItems: 'center',
+    gap: 8,
   },
-  radiusOptionSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+  locationButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
   },
-  radiusOptionText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
-  radiusOptionTextSelected: {
+  locationButtonText: {
     color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
-  // Filter button styles
   filterButton: {
     backgroundColor: '#007AFF',
     paddingHorizontal: 12,

@@ -17,7 +17,7 @@ import { AuthResponseData } from '../types';
 
 const LoginScreen: React.FC = () => {
   const { login, googleLogin } = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -30,7 +30,7 @@ const LoginScreen: React.FC = () => {
   const emailLoginMutation = useMutation<
     AuthResponseData,
     Error,
-    { email: string; password: string }
+    { identifier: string; password: string }
   >({
     mutationFn: loginData => authService.login(loginData),
     onSuccess: async data => {
@@ -48,7 +48,9 @@ const LoginScreen: React.FC = () => {
     },
     onError: error => {
       console.error('Login failed:', error);
-      setErrorMessage('Login failed. Please check your email and password.');
+      setErrorMessage(
+        'Login failed. Please check your username/email and password.'
+      );
     },
   });
 
@@ -64,13 +66,13 @@ const LoginScreen: React.FC = () => {
   });
 
   const handleEmailLogin = () => {
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage('Please enter both email and password');
+    if (!identifier.trim() || !password.trim()) {
+      setErrorMessage('Please enter both username/email and password');
       return;
     }
 
     setErrorMessage('');
-    emailLoginMutation.mutate({ email: email.trim(), password });
+    emailLoginMutation.mutate({ identifier: identifier.trim(), password });
   };
 
   const handleGoogleLogin = async () => {
@@ -112,10 +114,10 @@ const LoginScreen: React.FC = () => {
           <View style={styles.form}>
             <TextInput
               style={styles.input}
-              placeholder="Email"
-              value={email}
+              placeholder="Username or Email"
+              value={identifier}
               onChangeText={text => {
-                setEmail(text);
+                setIdentifier(text);
                 if (errorMessage) setErrorMessage(null);
               }}
               keyboardType="email-address"

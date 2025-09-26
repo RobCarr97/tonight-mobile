@@ -41,6 +41,11 @@ class VenueService {
         params.venueTypes.forEach(type => {
           queryParams.append('venueTypes', type);
         });
+      } else {
+        // Default to all venue types when none specified
+        ['bar', 'restaurant', 'coffee-shop'].forEach(type => {
+          queryParams.append('venueTypes', type);
+        });
       }
 
       // Add event date filter if specified
@@ -53,9 +58,10 @@ class VenueService {
         : '';
 
       // Use single venues/search endpoint with type filtering
-      const venues = await this.fetchVenuesFromEndpoint(
-        `/venues/search${queryString}`
-      );
+      const endpoint = `/venues/search${queryString}`;
+      console.log('Fetching venues from endpoint:', endpoint);
+      const venues = await this.fetchVenuesFromEndpoint(endpoint);
+      console.log('Venues service returned:', venues.length, 'venues');
       return venues;
     } catch (error) {
       if (error instanceof ApiError) {
@@ -70,7 +76,9 @@ class VenueService {
   // Helper method to fetch venues from a specific endpoint
   private async fetchVenuesFromEndpoint(endpoint: string): Promise<Bar[]> {
     try {
+      console.log('API call to:', endpoint);
       const response = await apiClient.get<any>(endpoint);
+      console.log('API response:', response);
 
       // Handle different response formats:
       // /venues/search returns: { venues: [...], searchCenter, radiusMeters, venueTypes, totalResults }
@@ -82,6 +90,7 @@ class VenueService {
           ? response.data
           : [];
 
+      console.log('Parsed venues from response:', venues.length);
       return venues;
     } catch (error) {
       // Log error but don't throw to allow other endpoints to succeed
@@ -177,6 +186,11 @@ class VenueService {
 
       if (params.venueTypes && params.venueTypes.length > 0) {
         params.venueTypes.forEach(type =>
+          queryParams.append('venueTypes', type)
+        );
+      } else {
+        // Default to all venue types when none specified
+        ['bar', 'restaurant', 'coffee-shop'].forEach(type =>
           queryParams.append('venueTypes', type)
         );
       }

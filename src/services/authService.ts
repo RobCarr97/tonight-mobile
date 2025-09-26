@@ -10,7 +10,7 @@ import {
 import { apiClient, ApiError } from './apiClient';
 
 class AuthService {
-  // Email/password login (matches /auth/login endpoint)
+  // Username/email and password login (matches /auth/login endpoint)
   async login(loginData: LoginRequest): Promise<AuthResponseData> {
     try {
       console.log('Attempting login with:', loginData);

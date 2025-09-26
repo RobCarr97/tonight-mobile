@@ -29,7 +29,8 @@ const DashboardScreen: React.FC = () => {
     },
     enabled: !!currentUser?.username,
     retry: 1, // Reduce retries to fail faster
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 10000, // 10 seconds - hot reload
+    refetchInterval: 20000, // Auto-refetch every 20 seconds
   });
 
   // Get user's available requests (events they can potentially join)
@@ -40,7 +41,8 @@ const DashboardScreen: React.FC = () => {
     },
     enabled: !!currentUser?.username,
     retry: 1, // Reduce retries to fail faster
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 15000, // 15 seconds - hot reload
+    refetchInterval: 25000, // Auto-refetch every 25 seconds
   });
 
   // Get all events to find ones where user was accepted
@@ -59,7 +61,8 @@ const DashboardScreen: React.FC = () => {
     },
     enabled: !!currentUser?.username,
     retry: 1, // Reduce retries to fail faster
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 12000, // 12 seconds - hot reload
+    refetchInterval: 18000, // Auto-refetch every 18 seconds
   });
 
   // Public profile query
@@ -83,9 +86,13 @@ const DashboardScreen: React.FC = () => {
     (myEventsQuery.data as any)?.data || myEventsQuery.data || [];
   const allEventsData = allEventsQuery.data || [];
 
+  // Ensure we have an array to work with
+  const allEvents = Array.isArray(allEventsData) ? allEventsData : [];
+
   console.log('Dashboard data processing:', {
     currentUsername: currentUser?.username,
     myEventsLength: myEvents.length,
+    allEventsLength: allEvents.length,
     myEventsQuery: {
       isLoading: myEventsQuery.isLoading,
       isError: myEventsQuery.isError,
@@ -94,15 +101,27 @@ const DashboardScreen: React.FC = () => {
     },
   });
 
-  // Ensure we have an array to work with
-  const allEvents = Array.isArray(allEventsData) ? allEventsData : [];
-  const myAvailableRequests = availableRequestsQuery.data || [];
-
   // Current date for filtering future events
   const currentDate = new Date();
 
+  // Combine both data sources for complete event data
+  const allEventsWithMyEvents = [...allEvents];
+  // Add events from myEvents that might have more complete data
+  myEvents.forEach((myEvent: any) => {
+    const existingIndex = allEventsWithMyEvents.findIndex(
+      e => e.id === myEvent.id
+    );
+    if (existingIndex >= 0) {
+      // Replace with more complete data from myEvents
+      allEventsWithMyEvents[existingIndex] = myEvent;
+    } else {
+      // Add if not already present
+      allEventsWithMyEvents.push(myEvent);
+    }
+  });
+
   // Upcoming Events: Events where user was accepted (either as host accepting someone or as requester who was accepted)
-  const upcomingEvents = allEvents.filter(event => {
+  const upcomingEvents = allEventsWithMyEvents.filter(event => {
     const eventDateTime = new Date(`${event.eventDate} ${event.eventTime}`);
     const isFuture = eventDateTime > currentDate;
 
@@ -126,6 +145,29 @@ const DashboardScreen: React.FC = () => {
     );
   });
 
+  // Debug: Check what's in both queries
+  console.log('Events debugging:', {
+    currentUsername: currentUser?.username,
+    myEventsQuery: {
+      data: myEventsQuery.data,
+      isLoading: myEventsQuery.isLoading,
+      error: myEventsQuery.error,
+    },
+    myEvents: myEvents,
+    myHostedEvents: myHostedEvents,
+    allEventsQuery: {
+      data: allEventsQuery.data,
+      isLoading: allEventsQuery.isLoading,
+      error: allEventsQuery.error,
+    },
+    allEvents: allEvents.map(event => ({
+      id: event.id,
+      hostUserId: event.hostUserId,
+      status: event.status,
+      isMyEvent: event.hostUserId === currentUser?.username,
+    })),
+  });
+
   const handleViewProfile = (userId: string) => {
     console.log('👤 Profile button clicked for user:', userId);
     setSelectedUserId(userId);
@@ -141,6 +183,10 @@ const DashboardScreen: React.FC = () => {
           <View style={styles.userInfo}>
             <Text style={styles.welcomeText}>
               Welcome, {currentUser?.username}!
+              {(myEventsQuery.isFetching ||
+                allEventsQuery.isFetching ||
+                availableRequestsQuery.isFetching) &&
+                ' 🔄'}
             </Text>
           </View>
         </View>
@@ -156,7 +202,9 @@ const DashboardScreen: React.FC = () => {
 
         {/* Upcoming Dates (Accepted Events) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Dates</Text>
+          <Text style={styles.sectionTitle}>
+            Upcoming Dates {allEventsQuery.isFetching && '🔄'}
+          </Text>
           {allEventsQuery.isLoading ? (
             <Text style={styles.loadingText}>Loading events...</Text>
           ) : upcomingEvents.length > 0 ? (
@@ -221,7 +269,9 @@ const DashboardScreen: React.FC = () => {
 
         {/* My Hosted Events */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Open Dates</Text>
+          <Text style={styles.sectionTitle}>
+            My Open Dates {myEventsQuery.isFetching && '🔄'}
+          </Text>
           {myEventsQuery.isLoading ? (
             <Text style={styles.loadingText}>Loading events...</Text>
           ) : myHostedEvents.length > 0 ? (
@@ -396,6 +446,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+
   logoutButton: {
     backgroundColor: '#dc3545',
     paddingHorizontal: 16,
